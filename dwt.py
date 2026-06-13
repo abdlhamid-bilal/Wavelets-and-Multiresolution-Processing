@@ -26,15 +26,17 @@ details = pywt.idwt(None, cD, wavelet)[:len(t)]
 plt.style.use('seaborn-v0_8-whitegrid')
 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
 
-ax1.plot(t, original_signal, color='black', linewidth=1.5)
+n = np.arange(1, N + 1)
+
+ax1.plot(n, original_signal, color='black', linewidth=1.5)
 ax1.set_title(r"Original Signal $f(x)$", fontsize=14, fontweight='bold')
 ax1.set_ylabel("Amplitude")
 
-ax2.plot(t, approximation, color='#1f77b4', linewidth=1.5)
+ax2.plot(n, approximation, color='#1f77b4', linewidth=1.5)
 ax2.set_title(r"Approximation $T_{\phi}$", fontsize=14, fontweight='bold')
 ax2.set_ylabel("Amplitude")
 
-ax3.plot(t, details, color='#d62728', linewidth=1.5)
+ax3.plot(n, details, color='#d62728', linewidth=1.5)
 ax3.set_title(r"Details $T_{\psi}$", fontsize=14, fontweight='bold')
 ax3.set_ylabel("Amplitude")
 ax3.set_xlabel("Time / Position", fontsize=12)

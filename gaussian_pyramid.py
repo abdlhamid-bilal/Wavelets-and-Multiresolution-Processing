@@ -28,5 +28,6 @@ comparison = np.hstack((image, decimated_upscaled_1, decimated_upscaled_2, decim
 
 cv2.namedWindow("Original vs. Starke Decimation", cv2.WINDOW_NORMAL)
 cv2.imshow("Original vs. Starke Decimation", comparison)
+cv2.imwrite("images/decimation.png", comparison)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
