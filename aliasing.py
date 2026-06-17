@@ -4,17 +4,13 @@ import matplotlib.pyplot as plt
 
 image_bgr = cv2.imread('images/square_pattern.jpg')
 
-if image_bgr is None:
-    print("Fehler: Bild nicht gefunden. Bitte Pfad überprüfen!")
-    exit()
-
 image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
 h, w = image_rgb.shape[:2]
-mitte_y, mitte_x = h // 2, w // 2
+mid_y, mid_x = h // 2, w // 2
 
 offset = 1000
-image_crop = image_rgb[mitte_y - offset : mitte_y + offset, mitte_x - offset : mitte_x + offset]
+image_crop = image_rgb[mid_y - offset : mid_y + offset, mid_x - offset : mid_x + offset]
 
 r = 25
 
@@ -23,6 +19,7 @@ aliased_image = image_crop[::r, ::r]
 
 # Decimation with Gaussian Kernel
 sigma = r / 2.0
+# ksize is used to only view the effective neighborhood so pixels farther away have less wheight
 ksize = int(2 * round(3 * sigma) + 1) 
 smoothed_image = cv2.GaussianBlur(image_crop, (ksize, ksize), sigmaX=sigma)
 decimated_image = smoothed_image[::r, ::r] # Take every r-th pixel
