@@ -1,7 +1,7 @@
 from manim import *
 import numpy as np
 
-class MultiresolutionReconstruction(Scene):
+class Nesting(Scene):
     def construct(self):
         # 1. Setup Stacked Axes
         axes_top = Axes(x_range=[0, 10, 1], y_range=[-2.5, 2.5, 1], y_length=3, x_length=10).to_edge(UP)

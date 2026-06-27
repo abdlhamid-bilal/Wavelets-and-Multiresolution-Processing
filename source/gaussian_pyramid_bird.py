@@ -26,8 +26,8 @@ decimated_upscaled_3 = cv2.resize(decimated_3, (w, h), interpolation=cv2.INTER_N
 
 comparison = np.hstack((image, decimated_upscaled_1, decimated_upscaled_2, decimated_upscaled_3))
 
-cv2.namedWindow("Original vs. Starke Decimation", cv2.WINDOW_NORMAL)
-cv2.imshow("Original vs. Starke Decimation", comparison)
-cv2.imwrite("images/decimation.png", comparison)
+cv2.namedWindow("Result", cv2.WINDOW_NORMAL)
+cv2.imshow("Result", comparison)
+cv2.imwrite("results/images/bird_decimation.png", comparison)
 cv2.waitKey(0)
 cv2.destroyAllWindows()

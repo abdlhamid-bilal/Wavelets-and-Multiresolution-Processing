@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-bild_pfad = 'images/house.jpeg'
+bild_pfad = 'images/bird.jpg'
 image = cv2.imread(bild_pfad, cv2.IMREAD_GRAYSCALE)
 
 if image is None:

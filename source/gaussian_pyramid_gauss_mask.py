@@ -15,7 +15,7 @@ if h_orig > max_height:
     new_w = int(w_orig * scale)
     image = cv2.resize(image, (new_w, max_height))
 
-output_dir = "images/half_white_half_black_results"
+output_dir = "results/images/half_white_half_black_results"
 os.makedirs(output_dir, exist_ok=True)
 
 levels = 6

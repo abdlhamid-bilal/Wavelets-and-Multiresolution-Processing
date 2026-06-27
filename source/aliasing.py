@@ -38,5 +38,5 @@ axes[2].imshow(decimated_image, interpolation='nearest')
 axes[2].set_title(f"Real Decimation (r={r})\nANTI-ALIASING")
 
 plt.tight_layout()
-plt.savefig("images/aliasing.png", format="png", bbox_inches="tight")
+plt.savefig("results/images/aliasing.png", format="png", bbox_inches="tight")
 plt.show()

@@ -45,6 +45,6 @@ ax3.set_xlabel("Time / Position", fontsize=12)
 
 plt.tight_layout()
 
-plt.savefig("images/dwt_decomposition.png", format="png", bbox_inches="tight")
+plt.savefig("results/images/dwt_decomposition.png", format="png", bbox_inches="tight")
 
 plt.show()
