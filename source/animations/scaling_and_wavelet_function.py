@@ -1,11 +1,29 @@
 from manim import *
 import numpy as np
-from scipy.integrate import quad
+from scipy.interpolate import interp1d
 
-# --- Shared Mathematical Functions ---
+# --- Signal Definition (Trend + Noise + Jump) ---
+np.random.seed(42)
+N_points = 256
+t_arr = np.linspace(-5, 5, N_points)
+t_mapped = (t_arr + 5) / 10 
+
+trend = np.sin(4 * np.pi * t_mapped) 
+noise = 0.2 * np.sin(70 * np.pi * t_mapped) 
+
+jump = np.zeros_like(t_arr)
+mid_idx = N_points // 2
+jump[mid_idx : mid_idx + 5] = 2.0
+
+original_signal = trend + noise + jump
+
+# Interpolation des diskreten Signals für stetige Manim-Auswertung
+f_interp = interp1d(t_arr, original_signal, bounds_error=False, fill_value=0.0)
+
 def f(x): 
-    return np.sin(x) + 0.5 * np.cos(2.5 * x)
+    return f_interp(x)
 
+# --- Wavelet Definition (Mexican Hat & Gaussian Scaling) ---
 def phi(x): 
     return np.exp(-np.pi * x**2) 
 
@@ -18,276 +36,243 @@ def phi_jk(x, j, k):
 def psi_jk(x, j, k): 
     return (2**(j / 2)) * psi((2**j) * x - k)
 
+X_INT = np.linspace(-5, 5, 1000)
+DX = X_INT[1] - X_INT[0]
+
 
 # ==========================================
-# ANIMATION 1: Scaling Approximation (2 Axes)
+# ANIMATION 1: (3 Axes)
 # ==========================================
-class ScalingApproximation(Scene):
+class ScalingFunction(Scene):
     def construct(self):
-        # Top title
-        top_label = Tex("Scaling Function sliding over signal", font_size=32).to_edge(UP)
-        
-        # Axes with reduced x_length to prevent UI overlap in corners
-        axes_top = Axes(x_range=[-5, 5, 1], y_range=[-2, 2, 1], y_length=3, x_length=8.5).next_to(top_label, DOWN, buff=0.4)
-        axes_bot = Axes(x_range=[-5, 5, 1], y_range=[-2, 2, 1], y_length=3, x_length=8.5).shift(DOWN * 2)
+        self.camera.background_color = WHITE
+
+        j = 0  
+        k_tracker = ValueTracker(-4)
+
+        axes_top = Axes(x_range=[-5, 5, 1], y_range=[-2, 3, 1], y_length=1.8, x_length=8.5, axis_config={"color": BLACK})
+        axes_mid = Axes(x_range=[-5, 5, 1], y_range=[-2, 3, 1], y_length=1.8, x_length=8.5, axis_config={"color": BLACK})
+        axes_bot = Axes(x_range=[-5, 5, 1], y_range=[-2, 3, 1], y_length=1.8, x_length=8.5, axis_config={"color": BLACK})
+
+        VGroup(axes_top, axes_mid, axes_bot).arrange(DOWN, buff=0.8).move_to(ORIGIN)
+
+        top_label = Tex(r"Signal $f(x)$ \& Scaling function $\varphi_{0,k}(x)$", font_size=28, color=BLACK).next_to(axes_top, UP, buff=0.1, aligned_edge=LEFT)
+        mid_label = Tex(r"Inner product: $\langle f, \varphi_{0,k} \rangle$", font_size=28, color=BLACK).next_to(axes_mid, UP, buff=0.1, aligned_edge=LEFT)
+        bot_label = Tex(r"$c_0(k)$", font_size=28, color=BLACK).next_to(axes_bot, UP, buff=0.1, aligned_edge=LEFT)
 
         signal_graph = axes_top.plot(f, color=BLUE)
-        f_legend = MathTex("f(x)", color=BLUE, font_size=32).move_to(axes_top.c2p(4, 1.5))
-        phi_legend = MathTex("\\varphi_{j_0,k}(x)", color=YELLOW, font_size=32).next_to(f_legend, DOWN, buff=0.1)
+        self.play(
+            Create(VGroup(axes_top, axes_mid, axes_bot)),
+            Write(VGroup(top_label, mid_label, bot_label)),
+            Create(signal_graph)
+        )
 
-        self.play(Create(VGroup(axes_top, axes_bot)), Write(top_label), Create(signal_graph), Write(f_legend), Write(phi_legend))
-
-        # Dynamic UI Labels firmly in the corner
-        k_tracker = ValueTracker(-4)
-        j = 0 
-
-        j_label = MathTex("j_0 = 0 \\text{ (fixed)}", font_size=36).to_corner(UL)
-        k_label = always_redraw(lambda: MathTex(f"k = {int(round(k_tracker.get_value(), 0))}", font_size=36).next_to(j_label, DOWN, aligned_edge=LEFT))
+        j_label = MathTex(r"j_0 = 0 \text{ (fixed)}", font_size=36, color=BLACK).to_corner(UL)
+        k_label = always_redraw(lambda: MathTex(f"k = {int(round(k_tracker.get_value()))}", font_size=36, color=BLACK).next_to(j_label, DOWN, aligned_edge=LEFT))
         self.play(Write(j_label), Write(k_label))
 
-        scaling_graph = always_redraw(lambda: axes_top.plot(lambda x: phi_jk(x, j, k_tracker.get_value()), color=YELLOW))
-        self.add(scaling_graph)
+        def product_func(x, k): return f(x) * phi_jk(x, j, k)
 
-        # Unlabeled bottom stem plot updater
-        def update_coef(mob):
-            k_val = k_tracker.get_value()
-            area, _ = quad(lambda x: f(x) * phi_jk(x, j, k_val), -5, 5)
-            mob.become(VGroup(Dot(axes_bot.c2p(k_val, area), color=RED), Line(axes_bot.c2p(k_val, 0), axes_bot.c2p(k_val, area), color=RED)))
+        scaling_color = "#D4AF37"
+        scaling_graph = always_redraw(lambda: axes_top.plot(lambda x: phi_jk(x, j, k_tracker.get_value()), color=scaling_color))
+        product_graph = always_redraw(lambda: axes_mid.plot(lambda x: product_func(x, k_tracker.get_value()), color=GREEN))
+        shaded_area = always_redraw(lambda: axes_mid.get_area(product_graph, x_range=[-5, 5], color=GREEN).set_opacity(0.5))
 
-        dynamic_stem = VGroup().add_updater(update_coef)
-        self.add(dynamic_stem)
+        self.add(scaling_graph, product_graph, shaded_area)
 
-        extracted_points = []
-        for k_val in range(-4, 5):
-            self.play(k_tracker.animate.set_value(k_val), run_time=0.6)
-            area, _ = quad(lambda x: f(x) * phi_jk(x, j, k_val), -5, 5)
-            pt = axes_bot.c2p(k_val, area)
-            extracted_points.append(pt)
-            self.add(Dot(pt, color=RED), Line(axes_bot.c2p(k_val, 0), pt, color=RED))
-            self.wait(0.2)
-            
-        # Draw the envelope line at the end
-        envelope = VMobject(color=WHITE, stroke_width=3).set_points_as_corners(extracted_points)
-        self.play(Create(envelope), run_time=1.5)
+        k_start, k_end = -4, 4
+        discrete_k_vals = list(range(k_start, k_end + 1))
+        c_k_vals = []
+        for k_val in discrete_k_vals:
+            y_vals = f(X_INT) * phi_jk(X_INT, j, k_val)
+            c_k_vals.append(np.sum(y_vals) * DX)
+
+        stems = VGroup()
+        dot_color = RED
+        for k_val, c_k in zip(discrete_k_vals, c_k_vals):
+            k_pos = k_val / (2**j)
+            stem = Line(axes_bot.c2p(k_pos, 0), axes_bot.c2p(k_pos, c_k), color=dot_color)
+            dot = Dot(axes_bot.c2p(k_pos, c_k), color=dot_color, radius=0.06)
+            group = VGroup(stem, dot)
+            group.k_val = k_val
+            group.set_opacity(0)
+            stems.add(group)
+
+        def create_stem_updater(stems_vgroup):
+            def update_stems(vgroup):
+                current_k = k_tracker.get_value()
+                for group in vgroup:
+                    if current_k >= group.k_val - 0.01:
+                        group.set_opacity(1)
+                    else:
+                        group.set_opacity(0)
+            return update_stems
+
+        updater = create_stem_updater(stems)
+        stems.add_updater(updater)
+        self.add(stems)
+
+        self.wait(0.2)
+        num_k = len(discrete_k_vals)
+        step_time = max(0.05, 3.0 / num_k)
+        wait_time = max(0.02, 1.5 / num_k)
+
+        for k_val in discrete_k_vals[1:]:
+            self.play(k_tracker.animate.set_value(k_val), run_time=step_time)
+            self.wait(wait_time)
+
+        self.wait(0.5)
+        stems.remove_updater(updater)
+
+        new_bot_label = MathTex(
+            r"\sum_{k} c_{0}(k) \cdot \varphi_{0,k}(x)",
+            font_size=28,
+            color=BLACK
+        ).move_to(bot_label, aligned_edge=LEFT)
+        self.play(Transform(bot_label, new_bot_label))
+
+        def reconstructed_signal_func(x, c_vals=c_k_vals, k_vals=discrete_k_vals):
+            val = 0
+            for k_v, c_k in zip(k_vals, c_vals):
+                val += c_k * phi_jk(x, j, k_v)
+            return val
+
+        reconstructed_graph = axes_bot.plot(reconstructed_signal_func, color=YELLOW)
+
+        self.play(
+            FadeOut(stems),
+            FadeIn(reconstructed_graph),
+            run_time=1.0
+        )
         self.wait(2)
 
 
 # ==========================================
-# ANIMATION 2: Scaling Inner Product (3 Axes)
+# ANIMATION 2: (5 Axes: 3 Scales)
 # ==========================================
-class ScalingInnerProduct(Scene):
+class WaveletFunction(Scene):
     def construct(self):
-        top_label = Tex("Signal $f(x)$ \& Scaling function $\\varphi_{j_0,k}(x)$", font_size=28).to_edge(UP)
-        axes_top = Axes(x_range=[-5, 5, 1], y_range=[-2, 2, 1], y_length=1.8, x_length=8.5).next_to(top_label, DOWN, buff=0.2)
-        
-        mid_label = Tex("Inner product: $f(x) \\cdot \\varphi_{j_0,k}(x)$ (Area = $c_{j_0}(k)$)", font_size=28).next_to(axes_top, DOWN, buff=0.2, aligned_edge=LEFT)
-        axes_mid = Axes(x_range=[-5, 5, 1], y_range=[-2, 2, 1], y_length=1.8, x_length=8.5).next_to(mid_label, DOWN, buff=0.2)
-        
-        bot_label = Tex("Extracted coarse coefficients $c_{j_0}(k)$", font_size=28).next_to(axes_mid, DOWN, buff=0.2, aligned_edge=LEFT)
-        axes_bot = Axes(x_range=[-5, 5, 1], y_range=[-2, 2, 1], y_length=1.8, x_length=8.5).next_to(bot_label, DOWN, buff=0.2)
-
-        signal_graph = axes_top.plot(f, color=BLUE)
-        self.play(Create(VGroup(axes_top, axes_mid, axes_bot)), Write(VGroup(top_label, mid_label, bot_label)), Create(signal_graph))
-
-        k_tracker = ValueTracker(-4)
-        j = 0 
-
-        j_label = MathTex("j_0 = 0 \\text{ (fixed)}", font_size=36).to_corner(UL)
-        k_label = always_redraw(lambda: MathTex(f"k = {int(round(k_tracker.get_value(), 0))}", font_size=36).next_to(j_label, DOWN, aligned_edge=LEFT))
-        self.play(Write(j_label), Write(k_label))
-
-        def product(x, k): return f(x) * phi_jk(x, j, k)
-
-        scaling_graph = always_redraw(lambda: axes_top.plot(lambda x: phi_jk(x, j, k_tracker.get_value()), color=YELLOW))
-        product_graph = always_redraw(lambda: axes_mid.plot(lambda x: product(x, k_tracker.get_value()), color=GREEN))
-        shaded_area = always_redraw(lambda: axes_mid.get_area(product_graph, x_range=[-5, 5], color=GREEN, opacity=0.5))
-
-        def update_coef(mob):
-            k_val = k_tracker.get_value()
-            area, _ = quad(lambda x: product(x, k_val), -5, 5)
-            mob.become(VGroup(Dot(axes_bot.c2p(k_val, area), color=RED), Line(axes_bot.c2p(k_val, 0), axes_bot.c2p(k_val, area), color=RED)))
-
-        dynamic_stem = VGroup().add_updater(update_coef)
-        self.add(scaling_graph, product_graph, shaded_area, dynamic_stem)
-
-        extracted_points = []
-        for k_val in range(-4, 5):
-            self.play(k_tracker.animate.set_value(k_val), run_time=0.6)
-            area, _ = quad(lambda x: product(x, k_val), -5, 5)
-            pt = axes_bot.c2p(k_val, area)
-            extracted_points.append(pt)
-            self.add(Dot(pt, color=RED), Line(axes_bot.c2p(k_val, 0), pt, color=RED))
-        
-        envelope = VMobject(color=WHITE, stroke_width=3).set_points_as_corners(extracted_points)
-        self.play(Create(envelope), run_time=1.5)
-        self.wait(2)
-
-
-# ==========================================
-# ANIMATION 3: Wavelet Details (2 Axes, 3 Scales)
-# ==========================================
-class WaveletDetails(Scene):
-    def construct(self):
-        top_label = Tex("Wavelet Function sliding over signal (Multiple Scales)", font_size=32).to_edge(UP)
-        axes_top = Axes(x_range=[-5, 5, 1], y_range=[-2, 2, 1], y_length=3, x_length=8.5).next_to(top_label, DOWN, buff=0.4)
-        axes_bot = Axes(x_range=[-5, 5, 1], y_range=[-2, 2, 1], y_length=3, x_length=8.5).shift(DOWN * 2)
-
-        signal_graph = axes_top.plot(f, color=BLUE)
-        f_legend = MathTex("f(x)", color=BLUE, font_size=32).move_to(axes_top.c2p(4, 1.5))
-        psi_legend = MathTex("\\psi_{j,k}(x)", color=ORANGE, font_size=32).next_to(f_legend, DOWN, buff=0.1)
-
-        self.play(Create(VGroup(axes_top, axes_bot)), Write(top_label), Create(signal_graph), Write(f_legend), Write(psi_legend))
+        self.camera.background_color = WHITE
 
         j_tracker = ValueTracker(0)
         k_tracker = ValueTracker(-4)
 
-        j_label = always_redraw(lambda: MathTex(f"j = {int(round(j_tracker.get_value(), 0))}", font_size=36).to_corner(UL))
-        k_label = always_redraw(lambda: MathTex(f"k = {int(round(k_tracker.get_value(), 0))}", font_size=36).next_to(j_label, DOWN, aligned_edge=LEFT))
-        self.play(Write(j_label), Write(k_label))
+        axes_top = Axes(x_range=[-5, 5, 1], y_range=[-2, 3, 1], y_length=1.1, x_length=8.5, axis_config={"color": BLACK})
+        axes_mid = Axes(x_range=[-5, 5, 1], y_range=[-2, 3, 1], y_length=1.1, x_length=8.5, axis_config={"color": BLACK})
+        axes_bot0 = Axes(x_range=[-5, 5, 1], y_range=[-2, 3, 1], y_length=1.1, x_length=8.5, axis_config={"color": BLACK})
+        axes_bot1 = Axes(x_range=[-5, 5, 1], y_range=[-2, 3, 1], y_length=1.1, x_length=8.5, axis_config={"color": BLACK})
+        axes_bot2 = Axes(x_range=[-5, 5, 1], y_range=[-2, 3, 1], y_length=1.1, x_length=8.5, axis_config={"color": BLACK})
 
-        wavelet_graph = always_redraw(lambda: axes_top.plot(lambda x: psi_jk(x, j_tracker.get_value(), k_tracker.get_value()), color=ORANGE))
-        self.add(wavelet_graph)
+        VGroup(axes_top, axes_mid, axes_bot0, axes_bot1, axes_bot2).arrange(DOWN, buff=0.35).move_to(ORIGIN)
 
-        def update_coef(mob):
-            j_val = int(round(j_tracker.get_value(), 0))
-            k_val = k_tracker.get_value()
-            area, _ = quad(lambda x: f(x) * psi_jk(x, j_val, k_val), -5, 5)
-            x_pos = k_val / (2**j_val)
-            
-            # Color coding for different scales
-            if j_val == 0: color = RED
-            elif j_val == 1: color = YELLOW
-            else: color = TEAL
-                
-            mob.become(VGroup(Dot(axes_bot.c2p(x_pos, area), color=color), Line(axes_bot.c2p(x_pos, 0), axes_bot.c2p(x_pos, area), color=color)))
-
-        dynamic_stem = VGroup().add_updater(update_coef)
-        self.add(dynamic_stem)
-
-        # --- Scale j = 0 ---
-        pts_j0 = []
-        for k_val in range(-4, 5):
-            self.play(k_tracker.animate.set_value(k_val), run_time=0.5)
-            area, _ = quad(lambda x: f(x) * psi_jk(x, 0, k_val), -5, 5)
-            pt = axes_bot.c2p(k_val, area)
-            pts_j0.append(pt)
-            self.add(Dot(pt, color=RED), Line(axes_bot.c2p(k_val, 0), pt, color=RED))
-        
-        env0 = VMobject(color=RED, stroke_width=3).set_points_as_corners(pts_j0)
-        self.play(Create(env0))
-        self.wait(1)
-
-        # --- Scale j = 1 ---
-        self.play(j_tracker.animate.set_value(1), k_tracker.animate.set_value(-8), run_time=1.5)
-        pts_j1 = []
-        for k_val in range(-8, 9, 2):
-            self.play(k_tracker.animate.set_value(k_val), run_time=0.4)
-            area, _ = quad(lambda x: f(x) * psi_jk(x, 1, k_val), -5, 5)
-            pt = axes_bot.c2p(k_val/2, area)
-            pts_j1.append(pt)
-            self.add(Dot(pt, color=YELLOW), Line(axes_bot.c2p(k_val/2, 0), pt, color=YELLOW))
-            
-        env1 = VMobject(color=YELLOW, stroke_width=3).set_points_as_corners(pts_j1)
-        self.play(Create(env1))
-        self.wait(1)
-
-        # --- Scale j = 2 ---
-        self.play(j_tracker.animate.set_value(2), k_tracker.animate.set_value(-16), run_time=1.5)
-        pts_j2 = []
-        for k_val in range(-16, 17, 4):
-            self.play(k_tracker.animate.set_value(k_val), run_time=0.3)
-            area, _ = quad(lambda x: f(x) * psi_jk(x, 2, k_val), -5, 5)
-            pt = axes_bot.c2p(k_val/4, area)
-            pts_j2.append(pt)
-            self.add(Dot(pt, color=TEAL), Line(axes_bot.c2p(k_val/4, 0), pt, color=TEAL))
-            
-        env2 = VMobject(color=TEAL, stroke_width=3).set_points_as_corners(pts_j2)
-        self.play(Create(env2))
-        self.wait(2)
-
-
-# ==========================================
-# ANIMATION 4: Wavelet Inner Product (3 Axes, 3 Scales)
-# ==========================================
-class WaveletInnerProduct(Scene):
-    def construct(self):
-        j_tracker = ValueTracker(0)
-        k_tracker = ValueTracker(-4)
-
-        top_label = always_redraw(lambda: Tex(f"Signal $f(x)$ \& Wavelet function $\\psi_{{{int(j_tracker.get_value())},k}}(x)$", font_size=28).to_edge(UP))
-        axes_top = Axes(x_range=[-5, 5, 1], y_range=[-2, 2, 1], y_length=1.8, x_length=8.5).next_to(top_label, DOWN, buff=0.2)
-        
-        mid_label = Tex("Inner product: $f(x) \\cdot \\psi_{j,k}(x)$ (Area = $d_j(k)$)", font_size=28).next_to(axes_top, DOWN, buff=0.2, aligned_edge=LEFT)
-        axes_mid = Axes(x_range=[-5, 5, 1], y_range=[-2, 2, 1], y_length=1.8, x_length=8.5).next_to(mid_label, DOWN, buff=0.2)
-        
-        bot_label = Tex("Extracted detail coefficients $d_j(k)$", font_size=28).next_to(axes_mid, DOWN, buff=0.2, aligned_edge=LEFT)
-        axes_bot = Axes(x_range=[-5, 5, 1], y_range=[-2, 2, 1], y_length=1.8, x_length=8.5).next_to(bot_label, DOWN, buff=0.2)
+        top_label = always_redraw(
+            lambda: Tex(
+            r"Signal $f(x)$ \& Wavelet function $\psi_{%d,k}(x)$"
+            % int(round(j_tracker.get_value())),
+            font_size=24,
+            color=BLACK,
+        ).next_to(axes_top, UP, buff=0.08, aligned_edge=LEFT)
+        )
+        mid_label = Tex(r"Inner product: $\langle f, \psi_{j,k} \rangle$", font_size=24, color=BLACK).next_to(axes_mid, UP, buff=0.08, aligned_edge=LEFT)
+        bot0_label = Tex(r"$d_0(k)$", font_size=24, color=BLACK).next_to(axes_bot0, UP, buff=0.08, aligned_edge=LEFT)
+        bot1_label = Tex(r"$d_1(k)$", font_size=24, color=BLACK).next_to(axes_bot1, UP, buff=0.08, aligned_edge=LEFT)
+        bot2_label = Tex(r"$d_2(k)$", font_size=24, color=BLACK).next_to(axes_bot2, UP, buff=0.08, aligned_edge=LEFT)
 
         signal_graph = axes_top.plot(f, color=BLUE)
-        self.play(Create(VGroup(axes_top, axes_mid, axes_bot)), Write(VGroup(top_label, mid_label, bot_label)), Create(signal_graph))
+        self.play(
+            Create(VGroup(axes_top, axes_mid, axes_bot0, axes_bot1, axes_bot2)), 
+            Write(VGroup(top_label, mid_label, bot0_label, bot1_label, bot2_label)), 
+            Create(signal_graph)
+        )
 
-        j_label = always_redraw(lambda: MathTex(f"j = {int(round(j_tracker.get_value(), 0))}", font_size=36).to_corner(UL))
-        k_label = always_redraw(lambda: MathTex(f"k = {int(round(k_tracker.get_value(), 0))}", font_size=36).next_to(j_label, DOWN, aligned_edge=LEFT))
+        j_label = always_redraw(lambda: MathTex(f"j = {int(round(j_tracker.get_value(), 0))}", font_size=28, color=BLACK).to_corner(UL))
+        k_label = always_redraw(lambda: MathTex(f"k = {int(round(k_tracker.get_value()))}", font_size=28, color=BLACK).next_to(j_label, DOWN, aligned_edge=LEFT))
         self.play(Write(j_label), Write(k_label))
 
         def product(x, j, k): return f(x) * psi_jk(x, j, k)
 
         wavelet_graph = always_redraw(lambda: axes_top.plot(lambda x: psi_jk(x, j_tracker.get_value(), k_tracker.get_value()), color=ORANGE))
         product_graph = always_redraw(lambda: axes_mid.plot(lambda x: product(x, j_tracker.get_value(), k_tracker.get_value()), color=GREEN))
-        shaded_area = always_redraw(lambda: axes_mid.get_area(product_graph, x_range=[-5, 5], color=GREEN, opacity=0.5))
+        shaded_area = always_redraw(lambda: axes_mid.get_area(product_graph, x_range=[-5, 5], color=GREEN).set_opacity(0.5))
 
-        def update_coef(mob):
-            j_val = int(round(j_tracker.get_value(), 0))
-            k_val = k_tracker.get_value()
-            area, _ = quad(lambda x: product(x, j_val, k_val), -5, 5)
-            x_pos = k_val / (2**j_val)
+        self.add(wavelet_graph, product_graph, shaded_area)
+
+        scales_data = [
+            {"j": 0, "k_start": -4, "k_end": 4, "axes_bot": axes_bot0, "color": RED, "label": bot0_label},
+            {"j": 1, "k_start": -8, "k_end": 8, "axes_bot": axes_bot1, "color": "#D4AF37", "label": bot1_label},
+            {"j": 2, "k_start": -16, "k_end": 16, "axes_bot": axes_bot2, "color": TEAL, "label": bot2_label},
+        ]
+
+        for data in scales_data:
+            current_j = data["j"]
+            k_start = data["k_start"]
+            k_end = data["k_end"]
+            axes_bot = data["axes_bot"]
+            dot_color = data["color"]
             
-            if j_val == 0: color = RED
-            elif j_val == 1: color = YELLOW
-            else: color = TEAL
+            self.play(j_tracker.animate.set_value(current_j), k_tracker.animate.set_value(k_start), run_time=1.0)
+            
+            discrete_k_vals = list(range(k_start, k_end + 1))
+            c_k_vals = []
+            for k_val in discrete_k_vals:
+                y_vals = f(X_INT) * psi_jk(X_INT, current_j, k_val)
+                c_k_vals.append(np.sum(y_vals) * DX)
                 
-            mob.become(VGroup(Dot(axes_bot.c2p(x_pos, area), color=color), Line(axes_bot.c2p(x_pos, 0), axes_bot.c2p(x_pos, area), color=color)))
-
-        dynamic_stem = VGroup().add_updater(update_coef)
-        self.add(wavelet_graph, product_graph, shaded_area, dynamic_stem)
-
-        # --- Scale j = 0 ---
-        pts_j0 = []
-        for k_val in range(-4, 5):
-            self.play(k_tracker.animate.set_value(k_val), run_time=0.5)
-            area, _ = quad(lambda x: product(x, 0, k_val), -5, 5)
-            pt = axes_bot.c2p(k_val, area)
-            pts_j0.append(pt)
-            self.add(Dot(pt, color=RED), Line(axes_bot.c2p(k_val, 0), pt, color=RED))
+            stems = VGroup()
+            for k_val, c_k in zip(discrete_k_vals, c_k_vals):
+                k_pos = k_val / (2**current_j)
+                stem = Line(axes_bot.c2p(k_pos, 0), axes_bot.c2p(k_pos, c_k), color=dot_color)
+                dot = Dot(axes_bot.c2p(k_pos, c_k), color=dot_color, radius=0.06)
+                group = VGroup(stem, dot)
+                group.k_val = k_val
+                group.set_opacity(0)
+                stems.add(group)
+                
+            def create_stem_updater(stems_vgroup):
+                def update_stems(vgroup):
+                    current_k = k_tracker.get_value()
+                    for group in vgroup:
+                        if current_k >= group.k_val - 0.01:
+                            group.set_opacity(1)
+                        else:
+                            group.set_opacity(0)
+                return update_stems
+                
+            updater = create_stem_updater(stems)
+            stems.add_updater(updater)
+            self.add(stems)
             
-        env0 = VMobject(color=RED, stroke_width=3).set_points_as_corners(pts_j0)
-        self.play(Create(env0))
-        self.wait(1)
-        
-        # --- Scale j = 1 ---
-        self.play(j_tracker.animate.set_value(1), k_tracker.animate.set_value(-8), run_time=1.5)
-        pts_j1 = []
-        for k_val in range(-8, 9, 2):
-            self.play(k_tracker.animate.set_value(k_val), run_time=0.4)
-            area, _ = quad(lambda x: product(x, 1, k_val), -5, 5)
-            pt = axes_bot.c2p(k_val/2, area)
-            pts_j1.append(pt)
-            self.add(Dot(pt, color=YELLOW), Line(axes_bot.c2p(k_val/2, 0), pt, color=YELLOW))
-
-        env1 = VMobject(color=YELLOW, stroke_width=3).set_points_as_corners(pts_j1)
-        self.play(Create(env1))
-        self.wait(1)
-
-        # --- Scale j = 2 ---
-        self.play(j_tracker.animate.set_value(2), k_tracker.animate.set_value(-16), run_time=1.5)
-        pts_j2 = []
-        for k_val in range(-16, 17, 4):
-            self.play(k_tracker.animate.set_value(k_val), run_time=0.3)
-            area, _ = quad(lambda x: product(x, 2, k_val), -5, 5)
-            pt = axes_bot.c2p(k_val/4, area)
-            pts_j2.append(pt)
-            self.add(Dot(pt, color=TEAL), Line(axes_bot.c2p(k_val/4, 0), pt, color=TEAL))
+            self.wait(0.2)
+            num_k = len(discrete_k_vals)
+            step_time = max(0.05, 3.0 / num_k)
+            wait_time = max(0.02, 1.5 / num_k)
             
-        env2 = VMobject(color=TEAL, stroke_width=3).set_points_as_corners(pts_j2)
-        self.play(Create(env2))
-        self.wait(2)
+            for k_val in discrete_k_vals[1:]:
+                self.play(k_tracker.animate.set_value(k_val), run_time=step_time)
+                self.wait(wait_time)
+                
+            self.wait(0.5)
+            stems.remove_updater(updater)
+            
+            current_label = data["label"]
+            new_label = MathTex(
+                fr"\sum_{{k}} d_{{{current_j}}}(k)\cdot\psi_{{{current_j},k}}(x)",
+                font_size=24,
+                color=BLACK
+            ).move_to(current_label, aligned_edge=LEFT)
+            self.play(Transform(current_label, new_label))
+            
+            def current_reconstructed_func(x, c_j=current_j, c_vals=c_k_vals, k_vals=discrete_k_vals):
+                val = 0
+                for k_v, c_k in zip(k_vals, c_vals):
+                    val += c_k * psi_jk(x, c_j, k_v)
+                return val
+            
+            reconstructed_graph = axes_bot.plot(current_reconstructed_func, color=YELLOW)
+            
+            self.play(
+                FadeOut(stems),
+                FadeIn(reconstructed_graph),
+                run_time=1.0
+            )
+            self.wait(1)
