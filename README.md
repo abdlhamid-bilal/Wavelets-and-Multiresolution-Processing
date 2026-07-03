@@ -4,8 +4,8 @@ This repository contains the accompanying implementations, visualizations, and a
 
 ## 👥 Authors
 
-* **Abdlhamid Bilal** ([@Orivex](https://github.com/abdlhamid-bilal))
-* **Berk Can Ucar** ([@BerkCanUcar](https://github.com/BerkCanUcar))
+* **Abdlhamid Bilal** ([@Abdlhamid Bilal](https://github.com/abdlhamid-bilal))
+* **Berk Can Ucar** ([@Berk Can Ucar](https://github.com/BerkCanUcar))
 
 ---
 
